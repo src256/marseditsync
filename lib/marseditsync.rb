@@ -10,6 +10,7 @@ module Marseditsync
   LINK_DIRS = ['LocalDrafts', 'PendingUploads']
 
   PREFERENCES_DIR = File.expand_path("~/Library/Preferences")
+  # DataSources.plistも必要？
   PLIST_FILE = 'com.red-sweater.marsedit.macappstore.plist' 
   
   class Command
@@ -49,6 +50,32 @@ module Marseditsync
       true
     end
 
+    def self.hostname
+      `hostname`.strip
+    end
+
+    def self.original_host?
+      self.hostname == ORIGINAL_HOST
+    end
+
+    def self.cp_new(srcfile, dstfile)
+      return unless FileTest.file?(srcfile)
+      srcfile_mtime = File.mtime(srcfile)
+
+      
+      dstfile_mtime = nil
+      if FileTest.file?(dstfile)
+        dstfile_mtime = File.mtime(dstfile)
+      end
+
+      puts "cp #{srcfile}(#{srcfile_mtime}) #{dstfile}(#{dstfile_mtime})"      
+      if dstfile_mtime.nil? || srcfile_mtime > dstfile_mtime
+        FileUtils.cp(srcfile, dstfile, :preserve => true)
+      else
+        puts "=>skip by mtime"
+      end    
+    end
+
     def initialize(opts)
       @opts = opts
     end
@@ -68,8 +95,8 @@ module Marseditsync
     def backup
       # バックアップできるのはオリジナルホストだけ
       host = `hostname`.strip
-      if host != ORIGINAL_HOST
-        puts "This mac cannot use for backup. #{host}"
+      unless self.class.original_host?
+        puts "This mac cannot use for backup. #{self.hostname}"
         return false
       end
       unless backup_links
@@ -111,26 +138,58 @@ module Marseditsync
 
     def backup_plists
       puts "# backup_plists"
-
       return false unless self.class.create_dir(DROPBOX_DIR)
-      
       srcfile = File.join(PREFERENCES_DIR, PLIST_FILE)
       dstfile = File.join(DROPBOX_DIR, PLIST_FILE)
-
-      srcfile_mtime = File.mtime(srcfile)
-      dstfile_mtime = File.mtime(dstfile)
-
-      puts "cp #{srcfile}(#{srcfile_mtime}) #{dstfile}(#{dstfile_mtime})"      
-      if srcfile_mtime > dstfile_mtime
-        FileUtils.cp(srcfile, dstfile, :preserve => true)
-      else
-        puts "=>skip by mtime"
-      end
+      self.class.cp_new(srcfile, dstfile)
       true
     end
 
     def restore
-      
+      if self.class.original_host?
+        puts "This mac cannot use for restore. #{self.hostname}"
+        return false
+      end
+
+      unless restore_links
+        return false
+      end
+      unless restore_plists
+        return false
+      end
+      true      
+    end
+
+    def restore_links
+      puts "# restore_links"
+      unless FileTest.directory?(MARSEDIT_DIR)
+        print "dir is not directory. #{MARSEDIT_DIR}"
+        return false
+      end
+      LINK_DIRS.each do |link_dir|
+        srcdir = File.join(DROPBOX_DIR, link_dir)
+        dstdir = File.join(MARSEDIT_DIR, link_dir)
+        timestamp = Time.now.strftime("%Y%m%d_%H%M%S")
+        if FileTest.directory?(srcdir)
+          if FileTest.directory?(dstdir)
+            # オリジナルはバックアップとして残す(なぜか他の親フォルダにmvできない?)
+            backupdir = File.join(MARSEDIT_DIR, link_dir + '_' + timestamp)
+            puts "mv #{dstdir} #{backupdir}"
+            FileUtils.mv(dstdir, backupdir)
+          end
+          puts "ln #{srcdir} #{dstdir}"
+          FileUtils.symlink(srcdir, dstdir)
+        end
+      end
+      true
+    end
+
+    def restore_plists
+      puts "# restore_plists"
+      srcfile = File.join(DROPBOX_DIR, PLIST_FILE)
+      dstfile = File.join(PREFERENCES_DIR, PLIST_FILE)
+      self.class.cp_new(srcfile, dstfile)      
+      true      
     end
   end
 end
