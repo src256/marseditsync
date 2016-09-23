@@ -101,7 +101,7 @@ module Marseditsync
       # バックアップできるのはオリジナルホストだけ
       host = `hostname`.strip
       unless self.class.original_host?
-        puts "This mac cannot use for backup. #{self.hostname}"
+        puts "This mac cannot use for backup. #{self.class.hostname}"
         return false
       end
       unless backup_links
@@ -154,7 +154,7 @@ module Marseditsync
 
     def restore
       if self.class.original_host?
-        puts "This mac cannot use for restore. #{self.hostname}"
+        puts "This mac cannot use for restore. #{self.class.hostname}"
         return false
       end
 
