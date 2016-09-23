@@ -10,28 +10,33 @@ module Marseditsync
   LINK_DIRS = ['LocalDrafts', 'PendingUploads']
 
   PREFERENCES_DIR = File.expand_path("~/Library/Preferences")
-  # DataSources.plistも必要？
-  PLIST_FILE = 'com.red-sweater.marsedit.macappstore.plist' 
-  
+  MAIN_PLIST_FILE = File.expand_path(File.join(PREFERENCES_DIR, 'com.red-sweater.marsedit.macappstore.plist'))
+  # DataSources.plistも必要？  
+  DATASOURCES_PLIST_FILE = File.expand_path(File.join(MARSEDIT_DIR, 'DataSources.plist'))
+  PLIST_FILES = [MAIN_PLIST_FILE, DATASOURCES_PLIST_FILE]
+
   class Command
     def self.run(argv)
       STDOUT.sync = true
       opts = {}
       opt = OptionParser.new(argv)
-      opt.banner = "Usage: #{opt.program_name} [-h|--help] <args>"
-      opt.separator('')
-      opt.separator "#{opt.program_name} Available Options"
-      opt.on_head('-h', '--help', 'Show this message') do |v|
+      opt.banner = "Usage: #{opt.program_name} [options] <backup|restore>"
+      opt.separator "options:"
+      opt.on('-h', '--help', 'Show this message') do |v|
         puts opt.help
         exit
       end
       # ジョブ
-      opt.on('-j VAL', '--job=VAL', "Exec specific job(backup|restore)") {|v| opts[:j] = v}
+#      opt.on('-j VAL', '--job=VAL', "Exec specific job(backup|restore)") {|v| opts[:j] = v}
       # 冗長メッセージ
       opt.on('-v', '--verbose', 'Verbose message') {|v| opts[:v] = v}
       opt.on('-n', '--dry-run', 'Message only') {|v| opts[:n] = v}
-      opt.parse!(argv)
+      opt.order!(argv)
 
+      # 最後の引数を:jに入れて送る
+      cmd = ARGV.shift
+      opts[:j] = cmd
+      
       command = Command.new(opts)
       command.run
     end
@@ -139,9 +144,11 @@ module Marseditsync
     def backup_plists
       puts "# backup_plists"
       return false unless self.class.create_dir(DROPBOX_DIR)
-      srcfile = File.join(PREFERENCES_DIR, PLIST_FILE)
-      dstfile = File.join(DROPBOX_DIR, PLIST_FILE)
-      self.class.cp_new(srcfile, dstfile)
+      PLIST_FILES.each do |srcfile|
+        basename = File.basename(srcfile)
+        dstfile = File.join(DROPBOX_DIR, basename)
+        self.class.cp_new(srcfile, dstfile)
+      end
       true
     end
 
@@ -186,9 +193,11 @@ module Marseditsync
 
     def restore_plists
       puts "# restore_plists"
-      srcfile = File.join(DROPBOX_DIR, PLIST_FILE)
-      dstfile = File.join(PREFERENCES_DIR, PLIST_FILE)
-      self.class.cp_new(srcfile, dstfile)      
+      PLIST_FILES.each do |dstfile|
+        basename = File.basename(srcfile)
+        srcfile = File.join(DROPBOX_DIR, basename)
+        self.class.cp_new(srcfile, dstfile)
+      end
       true      
     end
   end
