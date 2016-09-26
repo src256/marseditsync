@@ -201,8 +201,10 @@ module Marseditsync
             puts "mv #{dstdir} #{backupdir}"
             FileUtils.mv(dstdir, backupdir)
           end
-          puts "ln #{srcdir} #{dstdir}"
-          FileUtils.symlink(srcdir, dstdir)
+          unless FleTest.synmlink?(dstdir)
+            puts "ln #{srcdir} #{dstdir}"
+            FileUtils.symlink(srcdir, dstdir)
+          end
         end
       end
       true
