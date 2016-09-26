@@ -194,8 +194,8 @@ module Marseditsync
         srcdir = File.join(DROPBOX_DIR, link_dir)
         dstdir = File.join(MARSEDIT_DIR, link_dir)
         timestamp = Time.now.strftime("%Y%m%d_%H%M%S")
-        if FileTest.directory?(srcdir)
-          if FileTest.directory?(dstdir)
+        if FileTest.directory?(srcdir) 
+          if FileTest.directory?(dstdir) && !FileTest.symlink?(dstdir)
             # オリジナルはバックアップとして残す(なぜか他の親フォルダにmvできない?)
             backupdir = File.join(MARSEDIT_DIR, link_dir + '_' + timestamp)
             puts "mv #{dstdir} #{backupdir}"
