@@ -2,9 +2,9 @@
 require "marseditsync/version"
 require 'fileutils'
 require 'optparse'
+require 'yaml'
 
 module Marseditsync
-  ORIGINAL_HOST = 'maroon'
   DROPBOX_DIR = File.expand_path("~/Dropbox/app/MarsEdit")
   MARSEDIT_DIR = File.expand_path("~/Library/Application Support/MarsEdit")
   LINK_DIRS = ['LocalDrafts', 'PendingUploads']
@@ -14,6 +14,22 @@ module Marseditsync
   # DataSources.plistも必要？  
   DATASOURCES_PLIST_FILE = File.expand_path(File.join(MARSEDIT_DIR, 'DataSources.plist'))
   PLIST_FILES = [MAIN_PLIST_FILE, DATASOURCES_PLIST_FILE]
+
+  class Config
+    def initialize(yaml)
+      @yaml = yaml
+      @common_original_host = config_value('common', 'original_host', true)
+    end
+    attr_reader :common_original_host
+
+    def config_value(section, key, require)
+      value = @yaml[section][key]
+      if require && (value.nil? || value.empty?)
+        raise RuntimeError, "#{section}:#{key}: is empty"
+      end
+      value
+    end        
+  end
 
   class Command
     def self.run(argv)
@@ -26,18 +42,18 @@ module Marseditsync
         puts opt.help
         exit
       end
-      # ジョブ
-#      opt.on('-j VAL', '--job=VAL', "Exec specific job(backup|restore)") {|v| opts[:j] = v}
       # 冗長メッセージ
       opt.on('-v', '--verbose', 'Verbose message') {|v| opts[:v] = v}
       opt.on('-n', '--dry-run', 'Message only') {|v| opts[:n] = v}
+      opt.on('-c', '--config', 'Config file') {|v| opts[:c] = v} 
       opt.order!(argv)
 
       # 最後の引数を:jに入れて送る
       cmd = ARGV.shift
       opts[:j] = cmd
-      
-      command = Command.new(opts)
+      yamlfile = opts[:c] || '~/.marseditsyncrc'
+      config = Config.new(YAML.load_file(File.expand_path(yamlfile)))
+      command = Command.new(config, opts)
       command.run
     end
 
@@ -53,14 +69,6 @@ module Marseditsync
         return false
       end
       true
-    end
-
-    def self.hostname
-      `hostname`.strip
-    end
-
-    def self.original_host?
-      self.hostname == ORIGINAL_HOST
     end
 
     def self.cp_new(srcfile, dstfile, check_mtime = false)
@@ -82,7 +90,8 @@ module Marseditsync
       end    
     end
 
-    def initialize(opts)
+    def initialize(config, opts)
+      @config = config
       @opts = opts
     end
     
@@ -98,11 +107,18 @@ module Marseditsync
     end
 
     private
+    def hostname
+      `hostname`.strip
+    end
+    
+    def original_host?
+      hostname == @config.common_original_host
+    end
+    
     def backup
       # バックアップできるのはオリジナルホストだけ
-      host = `hostname`.strip
-      unless self.class.original_host?
-        puts "This mac cannot use for backup. #{self.class.hostname}"
+      unless original_host?
+        puts "This mac cannot use for backup. #{hostname}"
         return false
       end
       unless backup_links
@@ -154,8 +170,8 @@ module Marseditsync
     end
 
     def restore
-      if self.class.original_host?
-        puts "This mac cannot use for restore. #{self.class.hostname}"
+      if original_host?
+        puts "This mac cannot use for restore. #{hostname}"
         return false
       end
 
