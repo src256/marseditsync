@@ -63,18 +63,19 @@ module Marseditsync
       self.hostname == ORIGINAL_HOST
     end
 
-    def self.cp_new(srcfile, dstfile)
+    def self.cp_new(srcfile, dstfile, check_mtime = false)
       return unless FileTest.file?(srcfile)
-      srcfile_mtime = File.mtime(srcfile)
 
-      
+      srcfile_mtime = File.mtime(srcfile)
       dstfile_mtime = nil
       if FileTest.file?(dstfile)
         dstfile_mtime = File.mtime(dstfile)
       end
 
+      new_file = dstfile_mtime.nil? || srcfile_mtime > dstfile_mtime
+
       puts "cp #{srcfile}(#{srcfile_mtime}) #{dstfile}(#{dstfile_mtime})"      
-      if dstfile_mtime.nil? || srcfile_mtime > dstfile_mtime
+      if !check_mtime || new_file
         FileUtils.cp(srcfile, dstfile, :preserve => true)
       else
         puts "=>skip by mtime"
@@ -194,7 +195,7 @@ module Marseditsync
     def restore_plists
       puts "# restore_plists"
       PLIST_FILES.each do |dstfile|
-        basename = File.basename(srcfile)
+        basename = File.basename(dstfile)
         srcfile = File.join(DROPBOX_DIR, basename)
         self.class.cp_new(srcfile, dstfile)
       end
